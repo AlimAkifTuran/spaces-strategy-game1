@@ -7,8 +7,13 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-// Statik dosyaları sunmak için ana dizini belirtiyoruz
+// İstemci dosyalarının ana dizinde olduğunu belirtiyoruz
 app.use(express.static(path.join(__dirname, '../')));
+
+// Tarayıcıdan ana siteye girildiğinde index.html'i doğrudan sun
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, '../index.html'));
+});
 
 const gameState = {
     players: {},
@@ -49,12 +54,10 @@ io.on('connection', (socket) => {
 });
 
 setInterval(() => {
-    io.emit('updateState', gameState);
+    io.emit('updateState',gameState);
 }, 1000 / 30);
 
 const PORT = process.env.PORT || 10000;
 server.listen(PORT, () => {
-    console.log(`Sunucu ${PORT} portunda çalışıyor.`);
-});
     console.log(`Sunucu ${PORT} portunda çalışıyor.`);
 });
