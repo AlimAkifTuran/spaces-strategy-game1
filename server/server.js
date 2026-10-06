@@ -7,6 +7,7 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
+// Statik dosyaları sunmak için ana dizini belirtiyoruz
 app.use(express.static(path.join(__dirname, '../')));
 
 const gameState = {
@@ -21,7 +22,6 @@ const gameState = {
 io.on('connection', (socket) => {
     console.log(`Bir oyuncu bağlandı: ${socket.id}`);
 
-    // Yeni oyuncuyu başlat
     gameState.players[socket.id] = {
         x: Math.random() * 600 + 100,
         y: Math.random() * 400 + 100,
@@ -31,7 +31,6 @@ io.on('connection', (socket) => {
 
     socket.emit('init', { id: socket.id, state: gameState });
 
-    // Oyuncudan hareket komutu gelirse
     socket.on('move', (data) => {
         let player = gameState.players[socket.id];
         if (player) {
@@ -49,12 +48,13 @@ io.on('connection', (socket) => {
     });
 });
 
-// Saniyede 30 kez oyun durumunu her iki oyuncuya da yayınla
 setInterval(() => {
     io.emit('updateState', gameState);
 }, 1000 / 30);
 
 const PORT = process.env.PORT || 10000;
 server.listen(PORT, () => {
+    console.log(`Sunucu ${PORT} portunda çalışıyor.`);
+});
     console.log(`Sunucu ${PORT} portunda çalışıyor.`);
 });
