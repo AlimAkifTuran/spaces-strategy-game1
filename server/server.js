@@ -7,11 +7,8 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-// İstemci dosyalarını (index.html'in olduğu yeri) sunucuya tanıtıyoruz
-// Eğer index.html ana dizindeyse __dirname kullanılır
 app.use(express.static(path.join(__dirname, '../')));
 
-// Oyun Durumu
 const gameState = {
     players: {},
     minerals: [
@@ -24,13 +21,27 @@ const gameState = {
 io.on('connection', (socket) => {
     console.log(`Bir oyuncu bağlandı: ${socket.id}`);
 
+    // Yeni oyuncuyu başlat
     gameState.players[socket.id] = {
         x: Math.random() * 600 + 100,
         y: Math.random() * 400 + 100,
-        iron: 50
+        iron: 50,
+        radius: 12
     };
 
     socket.emit('init', { id: socket.id, state: gameState });
+
+    // Oyuncudan hareket komutu gelirse
+    socket.on('move', (data) => {
+        let player = gameState.players[socket.id];
+        if (player) {
+            let speed = 4;
+            if (data.up) player.y -= speed;
+            if (data.down) player.y += speed;
+            if (data.left) player.x -= speed;
+            if (data.right) player.x += speed;
+        }
+    });
 
     socket.on('disconnect', () => {
         console.log(`Oyuncu ayrıldı: ${socket.id}`);
@@ -38,6 +49,7 @@ io.on('connection', (socket) => {
     });
 });
 
+// Saniyede 30 kez oyun durumunu her iki oyuncuya da yayınla
 setInterval(() => {
     io.emit('updateState', gameState);
 }, 1000 / 30);
