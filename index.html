@@ -57,7 +57,9 @@
 
     <canvas id="gameCanvas" width="800" height="600"></canvas>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.js"></script>
     <script>
+        const socket = io("https://space-strategy-game-igo7.onrender.com");
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
 
