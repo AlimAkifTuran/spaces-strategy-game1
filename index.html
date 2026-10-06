@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Uzay Strateji Simülasyonu (Diep.io Style)</title>
+    <title>Multiplayer Uzay Strateji Oyunu</title>
     <style>
         body {
             margin: 0;
@@ -20,39 +20,21 @@
         canvas {
             border: 2px solid #333333;
             background-color: #1a1a1a;
-            box-shadow: 0 0 20px rgba(0, 255, 255, 0.1);
         }
         #ui {
             margin-bottom: 10px;
-            display: flex;
-            gap: 20px;
-            align-items: center;
             background: #222;
             padding: 10px 20px;
             border-radius: 5px;
             border: 1px solid #444;
-        }
-        button {
-            background: #00bcd4;
-            color: #111;
-            border: none;
-            padding: 8px 15px;
-            font-weight: bold;
-            cursor: pointer;
-            border-radius: 3px;
-            font-family: monospace;
-        }
-        button:hover {
-            background: #00acc1;
         }
     </style>
 </head>
 <body>
 
     <div id="ui">
-        <div>Demir Madeni: <span id="ironCount" style="color: #00ffcc; font-weight: bold;">50</span></div>
-        <button onclick="spawnMiner()">Madenci Üret (Bedel: 20 Demir)</button>
-        <div style="font-size: 12px; color: #888;">Madenciler otomatik en yakın madene gider ve üsse döner.</div>
+        Durum: <span id="status" style="color: #ff3366;">Bağlanıyor...</span> | Demir: <span id="ironCount" style="color: #00ffcc;">0</span>
+        <div style="font-size: 11px; color: #aaa; margin-top: 4px;">Kontroller: W, A, S, D veya Yön Tuşları</div>
     </div>
 
     <canvas id="gameCanvas" width="800" height="600"></canvas>
@@ -63,172 +45,81 @@
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
 
-        // Oyun Durumu (State)
-        let iron = 50;
-        const base = { x: 400, y: 300, radius: 30 };
-        
-        let minerals = [
-            { x: 200, y: 150, amount: 100, radius: 15 },
-            { x: 650, y: 200, amount: 150, radius: 18 },
-            { x: 300, y: 500, amount: 120, radius: 16 },
-            { x: 600, y: 450, amount: 80, radius: 12 }
-        ];
+        let myId = null;
+        let gameState = { players: {}, minerals: [] };
 
-        let units = []; // Üretilen araçlar
+        // Tuş durumlarını tutmak için nesne
+        const keys = { up: false, down: false, left: false, right: false };
 
-        // Madenci Üretme Fonksiyonu
-        function spawnMiner() {
-            if (iron >= 20) {
-                iron -= 20;
-                units.push({
-                    x: base.x,
-                    y: base.y,
-                    radius: 8,
-                    speed: 2,
-                    targetMineral: null,
-                    carrying: 0,
-                    state: 'GOING_TO_MINERAL' // GOING_TO_MINERAL, MINING, RETURNING
-                });
-                updateUI();
-            } else {
-                alert("Yeterli demir yok!");
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'w' || e.key === 'W' || e.key === 'ArrowUp') keys.up = true;
+            if (e.key === 's' || e.key === 'S' || e.key === 'ArrowDown') keys.down = true;
+            if (e.key === 'a' || e.key === 'A' || e.key === 'ArrowLeft') keys.left = true;
+            if (e.key === 'd' || e.key === 'D' || e.key === 'ArrowRight') keys.right = true;
+        });
+
+        window.addEventListener('keyup', (e) => {
+            if (e.key === 'w' || e.key === 'W' || e.key === 'ArrowUp') keys.up = false;
+            if (e.key === 's' || e.key === 'S' || e.key === 'ArrowDown') keys.down = false;
+            if (e.key === 'a' || e.key === 'A' || e.key === 'ArrowLeft') keys.left = false;
+            if (e.key === 'd' || e.key === 'D' || e.key === 'ArrowRight') keys.right = false;
+        });
+
+        socket.on('init', (data) => {
+            myId = data.id;
+            gameState = data.state;
+            document.getElementById('status').innerText = "Bağlandı!";
+            document.getElementById('status').style.color = "#00ffcc";
+        });
+
+        socket.on('updateState', (state) => {
+            gameState = state;
+            if (myId && gameState.players[myId]) {
+                document.getElementById('ironCount').innerText = Math.floor(gameState.players[myId].iron);
             }
-        }
+        });
 
-        function updateUI() {
-            document.getElementById('ironCount').innerText = iron;
-        }
-
-        // Oyun Döngüsü (Game Loop)
-        function update() {
-            // Araç mantığı
-            units.forEach(unit => {
-                if (unit.state === 'GOING_TO_MINERAL') {
-                    // En yakın madeni seç veya mevcut hedefe git
-                    if (!unit.targetMineral || unit.targetMineral.amount <= 0) {
-                        let available = minerals.filter(m => m.amount > 0);
-                        if (available.length > 0) {
-                            // En yakın madeni bul
-                            unit.targetMineral = available.reduce((prev, curr) => {
-                                let dPrev = Math.hypot(prev.x - unit.x, prev.y - unit.y);
-                                let dCurr = Math.hypot(curr.x - unit.x, curr.y - unit.y);
-                                return dCurr < dPrev ? curr : prev;
-                            });
-                        }
-                    }
-
-                    if (unit.targetMineral) {
-                        let dx = unit.targetMineral.x - unit.x;
-                        let dy = unit.targetMineral.y - unit.y;
-                        let dist = Math.hypot(dx, dy);
-
-                        if (dist < 5) {
-                            unit.state = 'MINING';
-                        } else {
-                            unit.x += (dx / dist) * unit.speed;
-                            unit.y += (dy / dist) * unit.speed;
-                        }
-                    }
-                } 
-                else if (unit.state === 'MINING') {
-                    if (unit.targetMineral && unit.targetMineral.amount > 0) {
-                        unit.targetMineral.amount -= 0.5;
-                        unit.carrying += 0.5;
-
-                        if (unit.carrying >= 10 || unit.targetMineral.amount <= 0) {
-                            unit.state = 'RETURNING';
-                        }
-                    } else {
-                        unit.state = 'RETURNING';
-                    }
-                } 
-                else if (unit.state === 'RETURNING') {
-                    let dx = base.x - unit.x;
-                    let dy = base.y - unit.y;
-                    let dist = Math.hypot(dx, dy);
-
-                    if (dist < 5) {
-                        iron += Math.floor(unit.carrying);
-                        unit.carrying = 0;
-                        unit.targetMineral = null;
-                        unit.state = 'GOING_TO_MINERAL';
-                        updateUI();
-                    } else {
-                        unit.x += (dx / dist) * unit.speed;
-                        unit.y += (dy / dist) * unit.speed;
-                    }
-                }
-            });
-
-            // Tükenen madenleri temizle
-            minerals = minerals.filter(m => m.amount > 0);
-        }
+        // Sürekli olarak tuş verilerini sunucuya gönder
+        setInterval(() => {
+            if (myId) {
+                socket.emit('move', keys);
+            }
+        }, 1000 / 30);
 
         function draw() {
-            // Arka planı temizle
             ctx.fillStyle = '#1a1a1a';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // Izgara çizgileri (diep.io havası için)
-            ctx.strokeStyle = '#222222';
-            ctx.lineWidth = 1;
-            for (let x = 0; x < canvas.width; x += 40) {
-                ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
-            }
-            for (let y = 0; y < canvas.height; y += 40) {
-                ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
-            }
-
-            // Madenleri Çiz (Mavi/Yeşilimsi poligonlar/daireler)
-            minerals.forEach(m => {
+            // Madenleri Çiz
+            gameState.minerals.items = gameState.minerals || [];
+            (gameState.minerals || []).forEach(m => {
                 ctx.beginPath();
-                ctx.arc(m.x, m.y, m.radius, 0, Math.PI * 2);
+                ctx.arc(m.x, m.y, 15, 0, Math.PI * 2);
                 ctx.fillStyle = '#00ffcc';
                 ctx.fill();
-                ctx.lineWidth = 2;
                 ctx.strokeStyle = '#008b8b';
                 ctx.stroke();
-
-                // Maden yazısı
-                ctx.fillStyle = '#ffffff';
-                ctx.font = '10px monospace';
-                ctx.fillText(Math.floor(m.amount), m.x - 10, m.y - m.radius - 4);
             });
 
-            // Üssü Çiz (Komuta Merkezi)
-            ctx.beginPath();
-            ctx.arc(base.x, base.y, base.radius, 0, Math.PI * 2);
-            ctx.fillStyle = '#ff3366';
-            ctx.fill();
-            ctx.lineWidth = 3;
-            ctx.strokeStyle = '#ff0055';
-            ctx.stroke();
-            
-            // Üs içi ikonik detay
-            ctx.beginPath();
-            ctx.arc(base.x, base.y, base.radius * 0.5, 0, Math.PI * 2);
-            ctx.fillStyle = '#111';
-            ctx.fill();
-
-            // Araçları Çiz (Minik kare/daireler)
-            units.forEach(u => {
+            // Oyuncuları Çiz (Kendi gemin sarı, diğer oyuncular kırmızı)
+            for (let id in gameState.players) {
+                let p = gameState.players[id];
                 ctx.beginPath();
-                ctx.arc(u.x, u.y, u.radius, 0, Math.PI * 2);
-                ctx.fillStyle = '#ffff00';
+                ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+                ctx.fillStyle = (id === myId) ? '#ffff00' : '#ff3366';
                 ctx.fill();
-                ctx.lineWidth = 1;
-                ctx.strokeStyle = '#ffaa00';
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = '#ffffff';
                 ctx.stroke();
-            });
+            }
+
+            requestAnimationFrame(draw);
         }
 
-        function loop() {
-            update();
-            draw();
-            requestAnimationFrame(loop);
-        }
-
-        // Başlat
+        draw();
+    </script>
+</body>
+</html>
         loop();
     </script>
 </body>
