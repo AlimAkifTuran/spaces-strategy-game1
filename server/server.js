@@ -1,12 +1,17 @@
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
+const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-// Oyun Durumu (Tüm oyuncuların ve madenlerin merkezi)
+// İstemci dosyalarını (index.html'in olduğu yeri) sunucuya tanıtıyoruz
+// Eğer index.html ana dizindeyse __dirname kullanılır
+app.use(express.static(path.join(__dirname, '../')));
+
+// Oyun Durumu
 const gameState = {
     players: {},
     minerals: [
@@ -19,18 +24,13 @@ const gameState = {
 io.on('connection', (socket) => {
     console.log(`Bir oyuncu bağlandı: ${socket.id}`);
 
-    // Yeni oyuncuyu ekle (Rastgebeli başlangıç konumu)
     gameState.players[socket.id] = {
         x: Math.random() * 600 + 100,
         y: Math.random() * 400 + 100,
         iron: 50
     };
 
-    // Bağlanan oyuncuya mevcut oyun durumunu gönder
     socket.emit('init', { id: socket.id, state: gameState });
-
-    // Oyuncu hareket veya komut gönderdiğinde
-    socket.emit('updateState', gameState);
 
     socket.on('disconnect', () => {
         console.log(`Oyuncu ayrıldı: ${socket.id}`);
@@ -38,12 +38,11 @@ io.on('connection', (socket) => {
     });
 });
 
-// Saniyede 30 kez oyun durumunu tüm oyunculara yayınla (Game Loop)
 setInterval(() => {
     io.emit('updateState', gameState);
 }, 1000 / 30);
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 10000;
 server.listen(PORT, () => {
     console.log(`Sunucu ${PORT} portunda çalışıyor.`);
 });
